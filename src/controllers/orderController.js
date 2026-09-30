@@ -408,7 +408,7 @@ exports.getRecommendedProducts = async (req, res) => {
          JOIN orders o ON o.id = oi.order_id
          WHERE o.user_id = ?
        )
-       AND p.stock > 0
+       AND p.stock_quantity > 0
        AND p.category IN (
          SELECT DISTINCT p2.category FROM products p2
          JOIN order_items oi2 ON p2.id = oi2.product_id

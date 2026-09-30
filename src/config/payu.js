@@ -13,11 +13,9 @@ class PayUClient {
         : "https://test.payu.in/_payment";
 
     this.successURL =
-      process.env.PAYU_SUCCESS_URL ||
-      "http://localhost:5000/api/payu/success";
+      process.env.PAYU_SUCCESS_URL || "http://localhost:2000/api/payu/success";
     this.failureURL =
-      process.env.PAYU_FAILURE_URL ||
-      "http://localhost:5000/api/payu/failure";
+      process.env.PAYU_FAILURE_URL || "http://localhost:2000/api/payu/failure";
   }
 
   getConfig() {
