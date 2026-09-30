@@ -1,53 +1,43 @@
-const mysql = require("mysql2/promise");
 const bcrypt = require("bcryptjs");
-const dotenv = require("dotenv");
+const db = require("../src/config/db");
 
-dotenv.config();
-
-const db = mysql.createPool({
-  host: process.env.DB_HOST || "localhost",
-  port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER || "mysql",
-  password: process.env.DB_PASSWORD || "12345",
-  database: process.env.DB_NAME || "decorvault",
-});
+const ADMIN_EMAIL = "admin@gmail.com";
+const ADMIN_PASSWORD = "Admin@123";
+const ADMIN_NAME = "Admin";
+const ADMIN_MOBILE = "9999999999";
 
 async function seedAdmin() {
   try {
-    console.log("🌱 Starting database seed...");
+    console.log("🌱 Seeding admin user...");
 
-    const [existingUsers] = await db.query(
-      "SELECT id, email, role FROM users WHERE email = ?",
-      ["admin@gmail.com"],
+    const [existing] = await db.query(
+      "SELECT id, role FROM users WHERE email = ? LIMIT 1",
+      [ADMIN_EMAIL],
     );
 
-    if (existingUsers.length > 0) {
-      const existingAdmin = existingUsers[0];
+    const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
 
-      if (existingAdmin.role !== "admin") {
-        await db.query(
-          "UPDATE users SET role = ?, is_verified = TRUE WHERE id = ?",
-          ["admin", existingAdmin.id],
-        );
-
-        console.log("✅ Existing user promoted to admin.");
-      } else {
-        console.log("ℹ️ Admin already exists. No changes made.");
-      }
-
-      return;
+    if (existing.length > 0) {
+      const admin = existing[0];
+      await db.query(
+        `UPDATE users
+         SET password = ?, role = 'admin', is_verified = TRUE
+         WHERE id = ?`,
+        [passwordHash, admin.id],
+      );
+      console.log(
+        `✅ Admin '${ADMIN_EMAIL}' already existed — password reset, role ensured.`,
+      );
+    } else {
+      await db.query(
+        `INSERT INTO users (full_name, email, mobile, password, role, is_verified)
+         VALUES (?, ?, ?, ?, 'admin', TRUE)`,
+        [ADMIN_NAME, ADMIN_EMAIL, ADMIN_MOBILE, passwordHash],
+      );
+      console.log(`✅ Admin '${ADMIN_EMAIL}' created.`);
     }
-
-    const hashedPassword = await bcrypt.hash("Admin@123", 10);
-
-    await db.query(
-      `INSERT INTO users
-            (full_name, email, mobile, password, role, is_verified)
-            VALUES (?, ?, ?, ?, ?, ?)`,
-      ["Admin", "admin@gmail.com", "9999999999", hashedPassword, "admin", true],
-    );
-  } catch (error) {
-    console.error("❌ Seed failed:", error.message);
+  } catch (err) {
+    console.error("❌ Seed failed:", err.message);
     process.exitCode = 1;
   } finally {
     await db.end();
