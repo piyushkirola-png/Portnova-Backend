@@ -1,4 +1,3 @@
-// src/services/bulkProductService.js
 const db = require("../config/db");
 
 class BulkProductService {
@@ -33,6 +32,8 @@ class BulkProductService {
           if (!product.slug) {
             product.slug = this.generateSlug(product.name);
           }
+
+          product.variants = this.processVariants(product);
 
           const insertResult = await this.insertProduct(
             connection,
@@ -69,17 +70,54 @@ class BulkProductService {
     return results;
   }
 
+  /**
+   * Auto-generate variants from colors × sizes — mirrors productController.processVariants
+   */
+  processVariants(product) {
+    const colors = Array.isArray(product.colors) ? product.colors : [];
+    const sizes = Array.isArray(product.sizes) ? product.sizes : [];
+
+    if (colors.length === 0 || sizes.length === 0) {
+      return [];
+    }
+
+    const totalStock = Number(product.stock_quantity) || 0;
+    const stockPerVariant = Math.floor(
+      totalStock / (colors.length * sizes.length),
+    );
+
+    const variants = [];
+    for (const color of colors) {
+      for (const size of sizes) {
+        const colorName = color.startsWith("#")
+          ? `Color-${color.slice(1)}`
+          : color;
+        const variantId = `${product.slug}-${color.replace("#", "")}-${size}`;
+        variants.push({
+          variantId,
+          sku: variantId,
+          color: { name: colorName, code: color },
+          size,
+          price: product.discount_price || product.price,
+          stock: stockPerVariant,
+          images: [],
+        });
+      }
+    }
+    return variants;
+  }
+
   async insertProduct(connection, product, adminId) {
     const query = `
-            INSERT INTO products (
-                name, slug, description, long_description, materials, care_instructions,
-                specifications, additional_info, weight, warranty, admin_email, admin_name,
-                admin_number, price, discount_price, stock_quantity, category, brand,
-                packing_standard, video_url, type, affiliate_link, product_images,
-                tags, colors, sizes, features, variants, delivery_charges,
-                default_delivery_charge, is_featured, is_new_arrival, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `;
+      INSERT INTO products (
+        name, slug, description, long_description, materials, care_instructions,
+        specifications, additional_info, weight, warranty, admin_email, admin_name,
+        admin_number, price, discount_price, stock_quantity, category, brand,
+        packing_standard, video_url, type, affiliate_link, product_images,
+        tags, colors, sizes, features, variants, delivery_charges,
+        default_delivery_charge, is_featured, is_new_arrival, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
 
     const values = [
       product.name,
@@ -90,14 +128,14 @@ class BulkProductService {
       product.care_instructions || null,
       product.specifications ? JSON.stringify(product.specifications) : null,
       product.additional_info || null,
-      product.weight || 0.0,
+      Number(product.weight) || 0.0,
       product.warranty || null,
       product.admin_email || null,
       product.admin_name || null,
       product.admin_number || null,
-      product.price || 0,
-      product.discount_price || 0,
-      product.stock_quantity || 0,
+      Number(product.price) || 0,
+      Number(product.discount_price) || 0,
+      Number(product.stock_quantity) || 0,
       product.category || null,
       product.brand || null,
       product.packing_standard || null,
@@ -113,7 +151,7 @@ class BulkProductService {
       product.delivery_charges
         ? JSON.stringify(product.delivery_charges)
         : null,
-      product.default_delivery_charge || 0.0,
+      Number(product.default_delivery_charge) || 0.0,
       product.is_featured || 0,
       product.is_new_arrival || 0,
       product.status || "active",

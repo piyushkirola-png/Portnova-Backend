@@ -1,5 +1,3 @@
-// src/utils/csvParser.js
-
 /**
  * Parse CSV string to array of product objects
  */
@@ -17,29 +15,85 @@ function parseCSV(csvString) {
     name: "name",
     "product name": "name",
     title: "name",
+    slug: "slug",
     price: "price",
     category: "category",
     brand: "brand",
     stock: "stock_quantity",
     "stock quantity": "stock_quantity",
+    stock_quantity: "stock_quantity",
     quantity: "stock_quantity",
     description: "description",
     "long description": "long_description",
+    long_description: "long_description",
     weight: "weight",
     status: "status",
     "discount price": "discount_price",
     discount_price: "discount_price",
     sku: "sku",
     images: "product_images",
+    "product images": "product_images",
+    product_images: "product_images",
     tags: "tags",
     colors: "colors",
     sizes: "sizes",
+    features: "features",
+    "additional features": "features",
     type: "type",
     "is featured": "is_featured",
     is_featured: "is_featured",
     "is new arrival": "is_new_arrival",
     is_new_arrival: "is_new_arrival",
+    materials: "materials",
+    material: "materials",
+    warranty: "warranty",
+    "care instructions": "care_instructions",
+    care_instructions: "care_instructions",
+    "additional info": "additional_info",
+    additional_info: "additional_info",
+    specifications: "specifications",
+    specification: "specifications",
+    "packing standard": "packing_standard",
+    packing_standard: "packing_standard",
+    "admin email": "admin_email",
+    admin_email: "admin_email",
+    "admin name": "admin_name",
+    admin_name: "admin_name",
+    "admin number": "admin_number",
+    admin_number: "admin_number",
+    "video url": "video_url",
+    video_url: "video_url",
+    "affiliate link": "affiliate_link",
+    affiliate_link: "affiliate_link",
+    "default delivery charge": "default_delivery_charge",
+    default_delivery_charge: "default_delivery_charge",
   };
+
+  // Fields that should be parsed as arrays (JSON or pipe-separated or comma-separated)
+  const ARRAY_FIELDS = [
+    "product_images",
+    "tags",
+    "colors",
+    "sizes",
+    "features",
+    "variants",
+    "delivery_charges",
+    "specifications",
+  ];
+
+  // Fields that are numbers
+  const FLOAT_FIELDS = [
+    "price",
+    "discount_price",
+    "weight",
+    "default_delivery_charge",
+  ];
+
+  // Fields that are numbers (integer)
+  const INT_FIELDS = ["stock_quantity"];
+
+  // Boolean fields
+  const BOOL_FIELDS = ["is_featured", "is_new_arrival"];
 
   // Map headers to database fields
   const mappedHeaders = headers.map((header) => {
@@ -56,44 +110,20 @@ function parseCSV(csvString) {
 
     for (let j = 0; j < mappedHeaders.length; j++) {
       const field = mappedHeaders[j];
-      const value = values[j] ? values[j].trim() : "";
+      const rawValue = values[j] !== undefined ? values[j] : "";
+      const value = rawValue.trim();
 
-      // Convert values based on field type
-      if (
-        [
-          "price",
-          "discount_price",
-          "weight",
-          "default_delivery_charge",
-        ].includes(field)
-      ) {
+      if (FLOAT_FIELDS.includes(field)) {
         product[field] = parseFloat(value) || 0;
-      } else if (["stock_quantity"].includes(field)) {
+      } else if (INT_FIELDS.includes(field)) {
         product[field] = parseInt(value) || 0;
-      } else if (["is_featured", "is_new_arrival"].includes(field)) {
+      } else if (BOOL_FIELDS.includes(field)) {
         product[field] =
           value.toLowerCase() === "true" || value === "1" ? 1 : 0;
-      } else if (
-        [
-          "product_images",
-          "tags",
-          "colors",
-          "sizes",
-          "features",
-          "variants",
-          "delivery_charges",
-          "specifications",
-        ].includes(field)
-      ) {
-        try {
-          product[field] = JSON.parse(value);
-        } catch {
-          product[field] = value
-            ? value.split(",").map((item) => item.trim())
-            : [];
-        }
+      } else if (ARRAY_FIELDS.includes(field)) {
+        product[field] = parseArrayValue(value, field);
       } else {
-        product[field] = value;
+        product[field] = value === "" ? null : value;
       }
     }
 
@@ -108,6 +138,33 @@ function parseCSV(csvString) {
 }
 
 /**
+ * Parse a value into an array. Tries JSON first, then pipe, then comma.
+ */
+function parseArrayValue(value, field) {
+  if (!value) return [];
+
+  // Try JSON first
+  if (value.startsWith("[") || value.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [parsed];
+    } catch (e) {}
+  }
+
+  if (value.includes("|")) {
+    return value
+      .split("|")
+      .map((s) => s.trim())
+      .filter((s) => s !== "");
+  }
+
+  return value
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s !== "");
+}
+
+/**
  * Parse a single CSV line handling quoted values
  */
 function parseCSVLine(line) {
@@ -119,7 +176,12 @@ function parseCSVLine(line) {
     const char = line[i];
 
     if (char === '"') {
-      inQuotes = !inQuotes;
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
     } else if (char === "," && !inQuotes) {
       values.push(current.trim());
       current = "";
@@ -138,7 +200,6 @@ function parseCSVLine(line) {
 function validateProductData(product) {
   const errors = [];
 
-  // Required fields
   if (!product.name || product.name.trim() === "") {
     errors.push("Product name is required");
   }
@@ -159,7 +220,6 @@ function validateProductData(product) {
     errors.push("Valid stock quantity is required (must be >= 0)");
   }
 
-  // Validate status
   if (
     product.status &&
     !["active", "inactive", "draft"].includes(product.status)
@@ -167,12 +227,10 @@ function validateProductData(product) {
     errors.push("Status must be: active, inactive, or draft");
   }
 
-  // Validate type
   if (product.type && !["own", "affiliate"].includes(product.type)) {
     errors.push("Type must be: own or affiliate");
   }
 
-  // Validate discount price
   if (product.discount_price && product.discount_price >= product.price) {
     errors.push("Discount price must be less than regular price");
   }
@@ -189,30 +247,37 @@ function validateProductData(product) {
 function getCSVTemplate() {
   return [
     "name",
-    "price",
-    "category",
-    "brand",
-    "stock_quantity",
+    "slug",
     "description",
     "long_description",
+    "category",
+    "brand",
+    "packing_standard",
     "weight",
+    "materials",
+    "warranty",
+    "care_instructions",
+    "additional_info",
+    "specifications",
+    "price",
     "discount_price",
-    "status",
-    "type",
+    "stock_quantity",
     "product_images",
-    "tags",
-    "colors",
     "sizes",
     "features",
+    "status",
+    "type",
+    "colors",
+    "tags",
     "is_featured",
     "is_new_arrival",
   ].join(",");
 }
 
-// ✅ EXPORT ALL FUNCTIONS
 module.exports = {
   parseCSV,
   validateProductData,
   getCSVTemplate,
   parseCSVLine,
+  parseArrayValue,
 };

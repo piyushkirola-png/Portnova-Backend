@@ -19,7 +19,6 @@ const processVariants = (productData) => {
           : color;
         const variantId = `${productData.slug}-${color.replace("#", "")}-${size}`;
 
-        // Find matching variant images from the variants array
         const variantImageSet = productData.variants?.find(
           (v) => v.color === color && v.size === size,
         );
@@ -34,7 +33,7 @@ const processVariants = (productData) => {
           size,
           price: productData.discountPrice || productData.price,
           stock: stockPerVariant,
-          images: variantImageSet?.images || productData.productImages || [],
+          images: variantImageSet?.images || [],
         };
       }),
     );
