@@ -16,7 +16,7 @@ class PayUService {
     userEmail,
     userContact,
     firstName,
-    productInfo = "Decor Vault Order",
+    productInfo = "Portnova Order",
     notes = {},
   }) {
     try {

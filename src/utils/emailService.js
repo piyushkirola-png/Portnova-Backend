@@ -6,7 +6,7 @@ dotenv.config();
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
   port: process.env.EMAIL_PORT,
-  secure: process.env.EMAIL_PORT == 465, // true for 465, false for other ports
+  secure: process.env.EMAIL_PORT == 587,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
@@ -15,13 +15,13 @@ const transporter = nodemailer.createTransport({
 
 exports.sendOTP = async (email, otp) => {
   const mailOptions = {
-    from: `"Decor Vault" <${process.env.EMAIL_USER}>`,
+    from: `"Portnova" <${process.env.EMAIL_USER}>`,
     to: email,
-    subject: "Your Verification Code - Decor Vault",
+    subject: "Your Verification Code - Portnova",
     text: `Your OTP for registration is: ${otp}. It is valid for 10 minutes.`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-        <h2 style="color: #333; text-align: center;">Decor Vault</h2>
+        <h2 style="color: #333; text-align: center;">Portnova</h2>
         <p>Hello,</p>
         <p>Your one-time password (OTP) for completing your registration is:</p>
         <div style="background: #f4f4f4; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; margin: 20px 0; border-radius: 5px;">
@@ -30,7 +30,7 @@ exports.sendOTP = async (email, otp) => {
         <p>This code is valid for 10 minutes. Please do not share this OTP with anyone.</p>
         <p>If you did not request this, please ignore this email.</p>
         <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-        <p style="font-size: 12px; color: #888; text-align: center;">&copy; 2026 Decor Vault. All rights reserved.</p>
+        <p style="font-size: 12px; color: #888; text-align: center;">&copy; 2026 Portnova. All rights reserved.</p>
       </div>
     `,
   };
@@ -40,9 +40,9 @@ exports.sendOTP = async (email, otp) => {
 
 exports.sendPasswordResetOTP = async (email, otp) => {
   const mailOptions = {
-    from: `"Decor Vault" <${process.env.EMAIL_USER}>`,
+    from: `"Portnova" <${process.env.EMAIL_USER}>`,
     to: email,
-    subject: "Password Reset Code - Decor Vault",
+    subject: "Password Reset Code - Portnova",
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
         <h2 style="color: #333; text-align: center;">Password Reset Request</h2>
@@ -53,7 +53,7 @@ exports.sendPasswordResetOTP = async (email, otp) => {
         </div>
         <p>This code is valid for 10 minutes. If you did not request this, please ignore this email.</p>
         <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-        <p style="font-size: 12px; color: #888; text-align: center;">&copy; 2026 Decor Vault. All rights reserved.</p>
+        <p style="font-size: 12px; color: #888; text-align: center;">&copy; 2026 Portnova. All rights reserved.</p>
       </div>
     `,
   };
@@ -62,27 +62,33 @@ exports.sendPasswordResetOTP = async (email, otp) => {
 
 exports.sendLoginOTP = async (email, otp) => {
   const mailOptions = {
-    from: `"Decor Vault" <${process.env.EMAIL_USER}>`,
+    from: `"Portnova" <${process.env.EMAIL_USER}>`,
     to: email,
-    subject: "Login Verification Code - Decor Vault",
+    subject: "Login Verification Code - Portnova",
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
         <h2 style="color: #333; text-align: center;">Secure Login</h2>
         <p>Hello,</p>
-        <p>Your one-time password (OTP) for logging into Decor Vault is:</p>
+        <p>Your one-time password (OTP) for logging into Portnova is:</p>
         <div style="background: #f4f4f4; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; margin: 20px 0; border-radius: 5px;">
           ${otp}
         </div>
         <p>This code is valid for 10 minutes. Please do not share this OTP with anyone.</p>
         <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-        <p style="font-size: 12px; color: #888; text-align: center;">&copy; 2026 Decor Vault. All rights reserved.</p>
+        <p style="font-size: 12px; color: #888; text-align: center;">&copy; 2026 Portnova. All rights reserved.</p>
       </div>
     `,
   };
   return transporter.sendMail(mailOptions);
 };
-// ==================== CONTACT FORM EMAIL ====================
-exports.sendContactFormEmail = async ({ name, email, phone, subject, message }) => {
+
+exports.sendContactFormEmail = async ({
+  name,
+  email,
+  phone,
+  subject,
+  message,
+}) => {
   const subjectLabels = {
     general: "General Inquiry",
     bulk: "Bulk Order / Wholesale",
@@ -94,9 +100,9 @@ exports.sendContactFormEmail = async ({ name, email, phone, subject, message }) 
   const readableSubject = subjectLabels[subject] || subject;
 
   const mailOptions = {
-    from: `"Decor Vault Contact" <${process.env.EMAIL_USER}>`,
+    from: `"Portnova Contact" <${process.env.EMAIL_USER}>`,
     to: process.env.CONTACT_RECEIVER_EMAIL || process.env.EMAIL_USER,
-    replyTo: email, // So you can reply directly to the customer
+    replyTo: email,
     subject: `📩 New Contact Inquiry: ${readableSubject}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
@@ -131,7 +137,7 @@ exports.sendContactFormEmail = async ({ name, email, phone, subject, message }) 
         <hr style="border: none; border-top: 1px solid #eee; margin: 25px 0;">
         <p style="font-size: 12px; color: #888; text-align: center;">
           Received on ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}<br>
-          &copy; 2026 Decor Vault. All rights reserved.
+          &copy; 2026 Portnova. All rights reserved.
         </p>
       </div>
     `,
@@ -140,26 +146,25 @@ exports.sendContactFormEmail = async ({ name, email, phone, subject, message }) 
   return transporter.sendMail(mailOptions);
 };
 
-// Optional: send a confirmation email to the customer
 exports.sendContactConfirmationToUser = async ({ name, email }) => {
   const mailOptions = {
-    from: `"Decor Vault" <${process.env.EMAIL_USER}>`,
+    from: `"Portnova" <${process.env.EMAIL_USER}>`,
     to: email,
-    subject: "We've received your message - Decor Vault",
+    subject: "We've received your message - Portnova",
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
         <h2 style="color: #D4AF37; text-align: center;">Thank You, ${name}!</h2>
         <p>We've received your message and our team will get back to you within 24 hours.</p>
         <p>In the meantime, feel free to explore our latest collections on our website.</p>
         <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-        <p style="font-size: 12px; color: #888; text-align: center;">&copy; 2026 Decor Vault. All rights reserved.</p>
+        <p style="font-size: 12px; color: #888; text-align: center;">&copy; 2026 Portnova. All rights reserved.</p>
       </div>
     `,
   };
 
   return transporter.sendMail(mailOptions);
 };
-// ==================== INVOICE EMAIL ====================
+
 exports.sendInvoiceEmail = async ({
   to,
   customerName,
@@ -170,7 +175,7 @@ exports.sendInvoiceEmail = async ({
   const companyName = process.env.COMPANY_NAME || "Our Store";
   const companyEmail = process.env.COMPANY_EMAIL || process.env.EMAIL_USER;
   const companyPhone = process.env.COMPANY_PHONE || "";
-  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:4028";
 
   const mailOptions = {
     from: `"${companyName}" <${process.env.EMAIL_USER}>`,

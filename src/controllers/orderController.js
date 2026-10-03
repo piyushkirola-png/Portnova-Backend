@@ -26,86 +26,115 @@ exports.getAllOrders = async (req, res) => {
 
 exports.getAnalyticsSummary = async (req, res) => {
   try {
+    // ── KPI query ──────────────────────────────────────────────
     const [kpiRows] = await db.execute(
       `SELECT 
          COUNT(*) AS total_orders,
-         COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total ELSE 0 END), 0) AS total_revenue,
-         COALESCE(AVG(CASE WHEN status != 'cancelled' THEN total ELSE NULL END), 0) AS avg_order_value,
-         COALESCE(SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END), 0) AS delivered_orders
+         COALESCE(SUM(CASE WHEN payment_status = 'paid' THEN total ELSE 0 END), 0) AS total_revenue,
+         COALESCE(AVG(CASE WHEN payment_status = 'paid' THEN total ELSE NULL END), 0) AS avg_order_value,
+         COALESCE(SUM(CASE WHEN payment_status = 'paid' THEN 1 ELSE 0 END), 0) AS paid_orders,
+         COALESCE(SUM(CASE WHEN payment_status = 'pending' THEN 1 ELSE 0 END), 0) AS pending_payment_orders,
+         COALESCE(SUM(CASE WHEN payment_status = 'failed' THEN 1 ELSE 0 END), 0) AS failed_payment_orders
        FROM orders`,
     );
 
-    const [monthlyRows] = await db.execute(
-      `SELECT
-         DATE_FORMAT(created_at, '%Y-%m') AS month_key,
-         DATE_FORMAT(created_at, '%b') AS month_label,
-         COUNT(*) AS orders,
-         SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS refunds,
-         COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total ELSE 0 END), 0) AS revenue
+    // ── Today's order count (IST) ──────────────────────────────
+    const [todayRows] = await db.execute(
+      `SELECT COUNT(*) AS today_orders
        FROM orders
-       WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH)
-       GROUP BY month_key, month_label
-       ORDER BY month_key ASC`,
+       WHERE DATE(CONVERT_TZ(created_at, '+00:00', '+05:30')) = 
+             DATE(CONVERT_TZ(NOW(), '+00:00', '+05:30'))`,
     );
 
-    const [categoryRows] = await db.execute(
+    // ── Last 7 days revenue (IST, day-wise) ────────────────────
+    const [last7Rows] = await db.execute(
       `SELECT
-          COALESCE(NULLIF(TRIM(p.category), ''), 'Uncategorized') AS name,
-          COALESCE(SUM(oi.quantity * oi.price), 0) AS value
-        FROM order_items oi
-        INNER JOIN orders o ON o.id = oi.order_id
-        LEFT JOIN products p ON p.id = oi.product_id
-        WHERE o.status != 'cancelled'
-        GROUP BY p.category
-        ORDER BY value DESC
-        LIMIT 5`,
-    );
-
-    const [statusRows] = await db.execute(
-      `SELECT
-         COALESCE(NULLIF(TRIM(status), ''), 'unknown') AS source,
-         COUNT(*) AS visitors
+         DATE(CONVERT_TZ(created_at, '+00:00', '+05:30')) AS day_key,
+         COALESCE(SUM(CASE WHEN payment_status = 'paid' THEN total ELSE 0 END), 0) AS revenue
        FROM orders
-       GROUP BY source
-       ORDER BY visitors DESC`,
+       WHERE DATE(CONVERT_TZ(created_at, '+00:00', '+05:30')) >= 
+             DATE_SUB(DATE(CONVERT_TZ(NOW(), '+00:00', '+05:30')), INTERVAL 6 DAY)
+       GROUP BY day_key
+       ORDER BY day_key ASC`,
     );
 
-    const monthMap = new Map(
-      monthlyRows.map((row) => [
-        row.month_key,
-        {
-          month: row.month_label,
-          revenue: Number(row.revenue || 0),
-          orders: Number(row.orders || 0),
-          refunds: Number(row.refunds || 0),
-        },
-      ]),
+    // Build last-7-days array with day names (Mon, Tue, ...)
+    const dayNameFormatter = new Intl.DateTimeFormat("en-US", {
+      weekday: "short",
+    });
+    const last7DaysRevenue = [];
+    const todayIST = new Date(
+      new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }),
     );
+    todayIST.setHours(0, 0, 0, 0);
 
-    const monthlySalesData = [];
-    const now = new Date();
-    now.setDate(1);
+    for (let i = 6; i >= 0; i -= 1) {
+      const d = new Date(todayIST);
+      d.setDate(todayIST.getDate() - i);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-    for (let i = 11; i >= 0; i -= 1) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const monthLabel = d.toLocaleString("en-US", { month: "short" });
+      const match = last7Rows.find((row) => {
+        const raw = row.day_key;
+        if (!raw) return false;
+        const rk =
+          typeof raw === "string"
+            ? raw.slice(0, 10)
+            : new Date(raw).toISOString().slice(0, 10);
+        return rk === key;
+      });
 
-      monthlySalesData.push(
-        monthMap.get(monthKey) || {
-          month: monthLabel,
-          revenue: 0,
-          orders: 0,
-          refunds: 0,
-        },
-      );
+      last7DaysRevenue.push({
+        day: dayNameFormatter.format(d),
+        date: key,
+        revenue: match ? Number(match.revenue || 0) : 0,
+      });
     }
 
+    // ── Sales by category (from categories table, revenue-based) ──
+    const [categoryRows] = await db.execute(
+      `SELECT
+          c.name AS name,
+          COALESCE(SUM(CASE WHEN o.payment_status = 'paid' THEN oi.quantity * oi.price ELSE 0 END), 0) AS value
+       FROM categories c
+       LEFT JOIN products p ON p.category = c.name
+       LEFT JOIN order_items oi ON oi.product_id = p.id
+       LEFT JOIN orders o ON o.id = oi.order_id
+       GROUP BY c.id, c.name
+       HAVING value > 0
+       ORDER BY value DESC`,
+    );
+
+    // ── Payment status breakdown (Success / Pending / Failed) ──
     const kpi = kpiRows[0] || {};
+    const statusBreakdown = [
+      { name: "Success", value: Number(kpi.paid_orders || 0) },
+      { name: "Pending", value: Number(kpi.pending_payment_orders || 0) },
+      { name: "Failed", value: Number(kpi.failed_payment_orders || 0) },
+    ];
+
+    // ── Today's orders list (max 5, IST) ───────────────────────
+    const [todayOrdersList] = await db.execute(
+      `SELECT 
+         o.id,
+         o.total,
+         o.payment_status,
+         o.status,
+         o.created_at,
+         u.full_name AS customer_name,
+         u.email AS customer_email
+       FROM orders o
+       LEFT JOIN users u ON o.user_id = u.id
+       WHERE DATE(CONVERT_TZ(o.created_at, '+00:00', '+05:30')) = 
+             DATE(CONVERT_TZ(NOW(), '+00:00', '+05:30'))
+       ORDER BY o.created_at DESC
+       LIMIT 5`,
+    );
+
+    // ── Build response ─────────────────────────────────────────
     const totalOrders = Number(kpi.total_orders || 0);
-    const deliveredOrders = Number(kpi.delivered_orders || 0);
+    const paidOrders = Number(kpi.paid_orders || 0);
     const conversionRate =
-      totalOrders > 0 ? (deliveredOrders / totalOrders) * 100 : 0;
+      totalOrders > 0 ? (paidOrders / totalOrders) * 100 : 0;
 
     res.json({
       success: true,
@@ -113,17 +142,26 @@ exports.getAnalyticsSummary = async (req, res) => {
         kpis: {
           totalRevenue: Number(kpi.total_revenue || 0),
           totalOrders,
+          todayOrders: Number(todayRows[0]?.today_orders || 0),
+          paidOrders,
+          pendingPaymentOrders: Number(kpi.pending_payment_orders || 0),
+          failedPaymentOrders: Number(kpi.failed_payment_orders || 0),
           conversionRate: Number(conversionRate.toFixed(1)),
           avgOrderValue: Number(kpi.avg_order_value || 0),
         },
-        monthlySalesData,
+        last7DaysRevenue,
         categoryData: categoryRows.map((row) => ({
           name: row.name,
           value: Number(row.value || 0),
         })),
-        trafficSourceData: statusRows.map((row) => ({
-          source: String(row.source || "unknown"),
-          visitors: Number(row.visitors || 0),
+        statusBreakdown,
+        todayOrdersList: todayOrdersList.map((row) => ({
+          id: row.id,
+          customer: row.customer_name || row.customer_email || "Guest",
+          total: Number(row.total || 0),
+          payment_status: row.payment_status || "pending",
+          status: row.status || "pending",
+          created_at: row.created_at,
         })),
       },
     });
@@ -276,8 +314,6 @@ exports.createOrder = async (req, res) => {
       link: "/user-dashboard/orders",
     });
 
-    // 🧾 Send invoice immediately for COD orders
-    // (Prepaid orders get theirs after payment verification)
     const isCOD =
       typeof paymentMethod === "string" &&
       paymentMethod.toLowerCase().includes("cod");
@@ -424,7 +460,7 @@ exports.getRecommendedProducts = async (req, res) => {
       const [fallbackProducts] = await db.execute(
         `SELECT p.id, p.name, p.price, p.product_images, p.slug
          FROM products p
-         WHERE p.stock > 0
+         WHERE p.stock_quantity > 0
          ORDER BY RAND()
          LIMIT ?`,
         [3 - products.length],
@@ -621,8 +657,6 @@ exports.updateOrderPaymentStatus = async (req, res) => {
   }
 };
 
-// ===================== CANCEL ORDER =====================
-
 exports.cancelOrder = async (req, res) => {
   try {
     const { id } = req.params;
@@ -710,8 +744,6 @@ exports.cancelOrder = async (req, res) => {
   }
 };
 
-// ===================== REPORT ISSUE =====================
-
 exports.reportIssue = async (req, res) => {
   try {
     const { id } = req.params;
@@ -780,8 +812,6 @@ exports.reportIssue = async (req, res) => {
   }
 };
 
-// ===================== GET ORDER STATUS =====================
-
 exports.getOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -825,12 +855,6 @@ exports.getOrderStatus = async (req, res) => {
   }
 };
 
-// ===================== INVOICE PDF =====================
-
-/**
- * Builds the invoice data for a given order id and returns:
- * { order, items, user, orderNumber }
- */
 async function buildInvoiceData(orderId) {
   const [orders] = await db.execute(
     `SELECT o.*, u.full_name, u.email, u.mobile
@@ -862,25 +886,19 @@ async function buildInvoiceData(orderId) {
   return { order, items, user, orderNumber: order.order_number };
 }
 
-/**
- * Streams the invoice PDF directly to the browser (for download button).
- */
 exports.downloadInvoicePDF = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
 
-    // Ownership check
-    const [rows] = await db.execute(
-      "SELECT user_id FROM orders WHERE id = ?",
-      [id],
-    );
+    const [rows] = await db.execute("SELECT user_id FROM orders WHERE id = ?", [
+      id,
+    ]);
     if (rows.length === 0) {
       return res
         .status(404)
         .json({ success: false, message: "Order not found" });
     }
-    // Allow if owner OR admin
     if (rows[0].user_id !== userId && req.user.role !== "admin") {
       return res
         .status(403)
@@ -910,24 +928,11 @@ exports.downloadInvoicePDF = async (req, res) => {
   }
 };
 
-/**
- * Generates PDF and emails it to the customer.
- * Called from payment success flows (Razorpay / PayU / Setu).
- *
- * FIXES:
- *  - Full stack trace on failure (was only err.message)
- *  - Retry up to 3 times with backoff (handles transient Puppeteer failures)
- *  - Idempotency guard so the same order isn't emailed twice in quick succession
- *  - Clear step-by-step logging so you can pinpoint exactly where it dies
- */
-
-// In-memory guard to avoid duplicate sends for the same order within a session
 const invoiceSendInFlight = new Set();
 
 exports.sendInvoiceAfterSuccess = async (orderId) => {
   const key = String(orderId);
 
-  // Prevent duplicate concurrent calls (e.g. Razorpay verify + webhook both firing)
   if (invoiceSendInFlight.has(key)) {
     console.log(`[invoice] Order ${key} already in flight, skipping duplicate`);
     return;
@@ -942,7 +947,6 @@ exports.sendInvoiceAfterSuccess = async (orderId) => {
       return;
     }
 
-    // ─── Step 1: Load order data ───
     console.log(`[invoice] ▶ Order ${key} — loading invoice data...`);
     const data = await buildInvoiceData(orderId);
     if (!data) {
@@ -960,7 +964,6 @@ exports.sendInvoiceAfterSuccess = async (orderId) => {
     const { generateInvoicePDF } = require("../utils/invoiceGenerator");
     const { sendInvoiceEmail } = require("../utils/emailService");
 
-    // ─── Step 2: Generate PDF with retry ───
     console.log(`[invoice] ▶ Order ${orderNumber} — generating PDF...`);
     let pdfBuffer;
     let lastErr;
@@ -986,7 +989,6 @@ exports.sendInvoiceAfterSuccess = async (orderId) => {
       throw lastErr || new Error("PDF generation failed after 3 attempts");
     }
 
-    // ─── Step 3: Send email ───
     console.log(
       `[invoice] ▶ Order ${orderNumber} — sending email to ${user.email}...`,
     );
@@ -1002,8 +1004,6 @@ exports.sendInvoiceAfterSuccess = async (orderId) => {
       `[invoice] ✅ Order ${orderNumber} → ${user.email} (messageId: ${info?.messageId}, total: ${Date.now() - startedAt}ms)`,
     );
   } catch (err) {
-    // Never throw — this is a side-effect, not the main flow.
-    // But log the FULL stack so we can actually debug.
     console.error(
       `❌ sendInvoiceAfterSuccess failed for order ${key}:`,
       err.stack || err,

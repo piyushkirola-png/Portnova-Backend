@@ -26,6 +26,8 @@
     "multer": "^2.0.2",
     "mysql2": "^3.16.1",
     "nodemailer": "^7.0.12",
+    "puppeteer": "^24.43.1",
+    "qrcode": "^1.5.4",
     "razorpay": "^2.9.8"
   },
   "devDependencies": {
