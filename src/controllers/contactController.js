@@ -4,12 +4,10 @@ const {
   sendContactConfirmationToUser,
 } = require("../utils/emailService");
 
-// Submit contact form
 exports.submitContactForm = async (req, res) => {
   try {
     const { name, email, phone, subject, message } = req.body;
 
-    // Validation
     if (!name || !email || !subject || !message) {
       return res.status(400).json({
         success: false,
@@ -17,7 +15,6 @@ exports.submitContactForm = async (req, res) => {
       });
     }
 
-    // Check if table exists, if not create it
     const [tableCheck] = await db.execute(
       'SHOW TABLES LIKE "contact_inquiries"',
     );
@@ -38,7 +35,6 @@ exports.submitContactForm = async (req, res) => {
       `);
     }
 
-    // Insert into database
     const query = `
       INSERT INTO contact_inquiries (name, email, phone, subject, message, status)
       VALUES (?, ?, ?, ?, ?, ?)
@@ -53,23 +49,18 @@ exports.submitContactForm = async (req, res) => {
       "pending",
     ]);
 
-    // 📧 Send email to admin (non-blocking — failure won't break the request)
     try {
       await sendContactFormEmail({ name, email, phone, subject, message });
-      console.log("✅ Contact email sent to admin");
     } catch (emailError) {
       console.error("⚠️ Failed to send admin email:", emailError.message);
     }
 
-    // 📧 Send confirmation to the user
     try {
-      await sendContactConfirmationToUser({ name, email });
-      console.log("✅ Confirmation email sent to user");
+      await sendContactConfirmationToUser({ name, email, phone, subject, message });
     } catch (emailError) {
       console.error("⚠️ Failed to send user confirmation:", emailError.message);
     }
 
-    // ✅ SINGLE response
     return res.status(201).json({
       success: true,
       message:
@@ -86,10 +77,8 @@ exports.submitContactForm = async (req, res) => {
   }
 };
 
-// Get all contacts (Admin)
 exports.getAllContacts = async (req, res) => {
   try {
-    // Check if table exists
     const [tableCheck] = await db.execute(
       'SHOW TABLES LIKE "contact_inquiries"',
     );
@@ -120,7 +109,6 @@ exports.getAllContacts = async (req, res) => {
   }
 };
 
-// Get single contact by ID
 exports.getContactById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -151,7 +139,6 @@ exports.getContactById = async (req, res) => {
   }
 };
 
-// Update contact status
 exports.updateContactStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -190,7 +177,6 @@ exports.updateContactStatus = async (req, res) => {
   }
 };
 
-// Delete contact
 exports.deleteContact = async (req, res) => {
   try {
     const { id } = req.params;

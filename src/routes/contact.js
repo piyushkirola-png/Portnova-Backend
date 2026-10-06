@@ -9,10 +9,8 @@ const {
   deleteContact,
 } = require("../controllers/contactController");
 
-// Public route - Submit contact form (No authentication required)
 router.post("/", submitContactForm);
 
-// Admin routes - Protected (Authentication required)
 router.get("/all", authenticate, getAllContacts);
 router.get("/:id", authenticate, getContactById);
 router.put("/:id/status", authenticate, updateContactStatus);

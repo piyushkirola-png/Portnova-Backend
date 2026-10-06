@@ -5,11 +5,14 @@ dotenv.config();
 
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
-  port: process.env.EMAIL_PORT,
-  secure: process.env.EMAIL_PORT == 587,
+  port: Number(process.env.EMAIL_PORT),
+  secure: Number(process.env.EMAIL_PORT) === 465,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
+  },
+  tls: {
+    rejectUnauthorized: false,
   },
 });
 
@@ -146,16 +149,63 @@ exports.sendContactFormEmail = async ({
   return transporter.sendMail(mailOptions);
 };
 
-exports.sendContactConfirmationToUser = async ({ name, email }) => {
+exports.sendContactConfirmationToUser = async ({
+  name,
+  email,
+  phone,
+  subject,
+  message,
+}) => {
+  const subjectLabels = {
+    general: "General Inquiry",
+    bulk: "Bulk Order / Wholesale",
+    support: "Order Support",
+    feedback: "Feedback",
+    collaboration: "Collaboration / Partnership",
+  };
+
+  const readableSubject =
+    subjectLabels[subject] || subject || "General Inquiry";
+
   const mailOptions = {
     from: `"Portnova" <${process.env.EMAIL_USER}>`,
     to: email,
+    replyTo: process.env.EMAIL_USER,
     subject: "We've received your message - Portnova",
+    text: `Thank you ${name}! We received your message about "${readableSubject}" and will respond within 24 hours.`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
         <h2 style="color: #D4AF37; text-align: center;">Thank You, ${name}!</h2>
         <p>We've received your message and our team will get back to you within 24 hours.</p>
+
+        <div style="background: #f9f9f9; padding: 15px; border-radius: 6px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #333; font-size: 14px;">Your submitted details:</h3>
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <tr>
+              <td style="padding: 6px 0; color: #555; width: 100px;"><strong>Name</strong></td>
+              <td style="padding: 6px 0;">${name}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #555;"><strong>Email</strong></td>
+              <td style="padding: 6px 0;">${email}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #555;"><strong>Phone</strong></td>
+              <td style="padding: 6px 0;">${phone || "Not provided"}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #555;"><strong>Subject</strong></td>
+              <td style="padding: 6px 0;">${readableSubject}</td>
+            </tr>
+          </table>
+          <div style="margin-top: 12px;">
+            <p style="color: #555; font-size: 13px; margin: 4px 0;"><strong>Your message:</strong></p>
+            <div style="background: #fff; padding: 10px; border-radius: 4px; border: 1px solid #eee; white-space: pre-wrap; font-size: 13px; color: #333;">${message}</div>
+          </div>
+        </div>
+
         <p>In the meantime, feel free to explore our latest collections on our website.</p>
+
         <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
         <p style="font-size: 12px; color: #888; text-align: center;">&copy; 2026 Portnova. All rights reserved.</p>
       </div>

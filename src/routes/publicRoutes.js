@@ -17,7 +17,7 @@ const { authenticate } = require("../middleware/auth");
 
 const router = express.Router();
 
-// Public category routes (no authentication required)
+// Public category routes 
 router.get("/categories", getAllCategories);
 router.get("/brands", getAllBrands);
 router.post("/subscribe", createSubscription);

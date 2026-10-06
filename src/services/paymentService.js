@@ -5,7 +5,6 @@ const RazorpayService = require("./razorpayService");
 const { generateOrderNumber } = require("../utils/paymentHelper");
 
 class PaymentService {
-  // Initialize payment
   static async initializePayment(paymentData) {
     try {
       const {
@@ -19,7 +18,6 @@ class PaymentService {
         notes = {},
       } = paymentData;
 
-      // Check if order exists
       const [orders] = await db.execute("SELECT * FROM orders WHERE id = ?", [
         orderId,
       ]);
@@ -29,7 +27,6 @@ class PaymentService {
 
       const order = orders[0];
 
-      // Check if payment already exists
       const existingPayments = await Payment.findByOrderId(orderId);
       if (existingPayments.length > 0) {
         const existingPayment = existingPayments[0];
@@ -38,8 +35,6 @@ class PaymentService {
         }
       }
 
-      // Generate receipt
-      // ─── PayU branch ──────────────────────────────
       if (paymentMethod === "payu") {
         const PayUService = require("./payuService");
         const result = await PayUService.createPaymentSession({
@@ -63,7 +58,6 @@ class PaymentService {
         };
       }
 
-      // Generate receipt
       const receipt = `order_${orderId}_${Date.now()}`;
 
       // Create Razorpay order
@@ -113,7 +107,6 @@ class PaymentService {
     }
   }
 
-  // Verify payment
   static async verifyPayment(verificationData) {
     try {
       const {
@@ -123,7 +116,6 @@ class PaymentService {
         orderId,
       } = verificationData;
 
-      // Verify signature
       const verification = RazorpayService.verifyPaymentSignature({
         razorpay_order_id,
         razorpay_payment_id,
@@ -138,20 +130,17 @@ class PaymentService {
         return { success: false, error: "Invalid payment signature" };
       }
 
-      // Find payment record
       const payment = await Payment.findByGatewayOrderId(razorpay_order_id);
       if (!payment) {
         return { success: false, error: "Payment record not found" };
       }
 
-      // Fetch payment details from Razorpay
       const paymentDetails =
         await RazorpayService.fetchPayment(razorpay_payment_id);
       if (!paymentDetails.success) {
         return { success: false, error: paymentDetails.error };
       }
 
-      // Update payment status
       await Payment.update(payment.id, {
         status: "paid",
         gateway_payment_id: razorpay_payment_id,
@@ -159,7 +148,6 @@ class PaymentService {
         gateway_response: paymentDetails,
       });
 
-      // Create transaction record
       await Transaction.create({
         payment_id: payment.id,
         gateway: "razorpay",
@@ -170,12 +158,10 @@ class PaymentService {
         response_data: paymentDetails,
       });
 
-      // Update order status
       await db.execute(
         `UPDATE orders SET status = 'confirmed', confirmed_at = NOW() WHERE id = ?`,
         [payment.order_id],
       );
-      // 🧾 Fire-and-forget invoice email (won't block or fail the response)
       require("../controllers/orderController")
         .sendInvoiceAfterSuccess(payment.order_id)
         .catch((e) => console.error("Invoice email error:", e.message));
@@ -192,7 +178,6 @@ class PaymentService {
     }
   }
 
-  // Get payment status
   static async getPaymentStatus(orderId) {
     try {
       const payments = await Payment.findByOrderId(orderId);
@@ -202,7 +187,6 @@ class PaymentService {
 
       const latestPayment = payments[0];
 
-      // Get transactions
       const transactions = await Transaction.findByPaymentId(latestPayment.id);
 
       return {
@@ -216,8 +200,7 @@ class PaymentService {
       return { success: false, error: error.message };
     }
   }
-
-  // Refund payment
+  
   static async refundPayment(orderId, amount, reason = "") {
     try {
       const payments = await Payment.findByOrderId(orderId);

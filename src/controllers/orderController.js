@@ -26,7 +26,6 @@ exports.getAllOrders = async (req, res) => {
 
 exports.getAnalyticsSummary = async (req, res) => {
   try {
-    // ── KPI query ──────────────────────────────────────────────
     const [kpiRows] = await db.execute(
       `SELECT 
          COUNT(*) AS total_orders,
@@ -38,7 +37,6 @@ exports.getAnalyticsSummary = async (req, res) => {
        FROM orders`,
     );
 
-    // ── Today's order count (IST) ──────────────────────────────
     const [todayRows] = await db.execute(
       `SELECT COUNT(*) AS today_orders
        FROM orders
@@ -46,7 +44,6 @@ exports.getAnalyticsSummary = async (req, res) => {
              DATE(CONVERT_TZ(NOW(), '+00:00', '+05:30'))`,
     );
 
-    // ── Last 7 days revenue (IST, day-wise) ────────────────────
     const [last7Rows] = await db.execute(
       `SELECT
          DATE(CONVERT_TZ(created_at, '+00:00', '+05:30')) AS day_key,
@@ -58,7 +55,6 @@ exports.getAnalyticsSummary = async (req, res) => {
        ORDER BY day_key ASC`,
     );
 
-    // Build last-7-days array with day names (Mon, Tue, ...)
     const dayNameFormatter = new Intl.DateTimeFormat("en-US", {
       weekday: "short",
     });
@@ -90,7 +86,6 @@ exports.getAnalyticsSummary = async (req, res) => {
       });
     }
 
-    // ── Sales by category (from categories table, revenue-based) ──
     const [categoryRows] = await db.execute(
       `SELECT
           c.name AS name,
@@ -104,7 +99,6 @@ exports.getAnalyticsSummary = async (req, res) => {
        ORDER BY value DESC`,
     );
 
-    // ── Payment status breakdown (Success / Pending / Failed) ──
     const kpi = kpiRows[0] || {};
     const statusBreakdown = [
       { name: "Success", value: Number(kpi.paid_orders || 0) },
@@ -112,7 +106,6 @@ exports.getAnalyticsSummary = async (req, res) => {
       { name: "Failed", value: Number(kpi.failed_payment_orders || 0) },
     ];
 
-    // ── Today's orders list (max 5, IST) ───────────────────────
     const [todayOrdersList] = await db.execute(
       `SELECT 
          o.id,
@@ -130,7 +123,6 @@ exports.getAnalyticsSummary = async (req, res) => {
        LIMIT 5`,
     );
 
-    // ── Build response ─────────────────────────────────────────
     const totalOrders = Number(kpi.total_orders || 0);
     const paidOrders = Number(kpi.paid_orders || 0);
     const conversionRate =
@@ -319,7 +311,6 @@ exports.createOrder = async (req, res) => {
       paymentMethod.toLowerCase().includes("cod");
 
     if (isCOD) {
-      console.log(`[order] COD order ${orderNumber} — sending invoice...`);
       exports
         .sendInvoiceAfterSuccess(orderId)
         .catch((e) =>
@@ -934,7 +925,6 @@ exports.sendInvoiceAfterSuccess = async (orderId) => {
   const key = String(orderId);
 
   if (invoiceSendInFlight.has(key)) {
-    console.log(`[invoice] Order ${key} already in flight, skipping duplicate`);
     return;
   }
   invoiceSendInFlight.add(key);
@@ -947,7 +937,6 @@ exports.sendInvoiceAfterSuccess = async (orderId) => {
       return;
     }
 
-    console.log(`[invoice] ▶ Order ${key} — loading invoice data...`);
     const data = await buildInvoiceData(orderId);
     if (!data) {
       console.warn(`[invoice] Order ${orderId} not found, skipping invoice`);
@@ -964,15 +953,11 @@ exports.sendInvoiceAfterSuccess = async (orderId) => {
     const { generateInvoicePDF } = require("../utils/invoiceGenerator");
     const { sendInvoiceEmail } = require("../utils/emailService");
 
-    console.log(`[invoice] ▶ Order ${orderNumber} — generating PDF...`);
     let pdfBuffer;
     let lastErr;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         pdfBuffer = await generateInvoicePDF({ order, items, user });
-        console.log(
-          `[invoice] ✔ PDF generated (attempt ${attempt}, ${pdfBuffer.length} bytes, ${Date.now() - startedAt}ms)`,
-        );
         break;
       } catch (err) {
         lastErr = err;
@@ -989,9 +974,6 @@ exports.sendInvoiceAfterSuccess = async (orderId) => {
       throw lastErr || new Error("PDF generation failed after 3 attempts");
     }
 
-    console.log(
-      `[invoice] ▶ Order ${orderNumber} — sending email to ${user.email}...`,
-    );
     const info = await sendInvoiceEmail({
       to: user.email,
       customerName: user.full_name,
@@ -999,10 +981,6 @@ exports.sendInvoiceAfterSuccess = async (orderId) => {
       orderId: order.id,
       pdfBuffer,
     });
-
-    console.log(
-      `[invoice] ✅ Order ${orderNumber} → ${user.email} (messageId: ${info?.messageId}, total: ${Date.now() - startedAt}ms)`,
-    );
   } catch (err) {
     console.error(
       `❌ sendInvoiceAfterSuccess failed for order ${key}:`,

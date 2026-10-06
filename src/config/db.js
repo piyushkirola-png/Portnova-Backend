@@ -18,15 +18,12 @@ const pool = mysql.createPool({
 
 const promisePool = pool.promise();
 
-// Auto-connect and setup database on startup
 async function initializeDatabase() {
   try {
-    // Test connection
     const connection = await promisePool.getConnection();
     console.log("✅ Database connected successfully");
     connection.release();
 
-    // Auto-setup from schema file
     await setupFromSchema();
   } catch (error) {
     console.log(
@@ -38,11 +35,9 @@ async function initializeDatabase() {
 
 async function setupFromSchema() {
   try {
-    // Read schema.sql file
     const schemaPath = path.join(__dirname, "../../db/schema.sql");
     const schemaSQL = fs.readFileSync(schemaPath, "utf8");
 
-    // Split by semicolon and execute each statement
     const statements = schemaSQL.split(";").filter((stmt) => stmt.trim());
 
     for (const statement of statements) {
@@ -57,7 +52,6 @@ async function setupFromSchema() {
   }
 }
 
-// Initialize on startup
 initializeDatabase();
 
 module.exports = promisePool;

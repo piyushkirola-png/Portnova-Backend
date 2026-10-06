@@ -4,13 +4,12 @@ const Payment = require("../models/Payment");
 const Transaction = require("../models/Transaction");
 
 class RazorpayService {
-  // Create a Razorpay order
   static async createOrder(orderData) {
     try {
       const { amount, currency = "INR", receipt, notes = {} } = orderData;
 
       const options = {
-        amount: amount * 100, // Convert to paise
+        amount: amount * 100,
         currency,
         receipt,
         notes,

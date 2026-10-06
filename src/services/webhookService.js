@@ -5,7 +5,6 @@ const Transaction = require("../models/Transaction");
 const WebhookLog = require("../models/WebhookLog");
 
 class WebhookService {
-  // ─── Log helper ───
   static async log({
     gateway,
     eventType,
@@ -34,7 +33,6 @@ class WebhookService {
     }
   }
 
-  // ─── Razorpay signature verification ───
   static verifyRazorpaySignature(rawBody, signature) {
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
     if (!secret) return false;
@@ -45,7 +43,6 @@ class WebhookService {
     return expected === signature;
   }
 
-  // ─── Main entry: process any webhook ───
   static async processWebhook(
     gateway,
     payload,
@@ -54,7 +51,6 @@ class WebhookService {
     userAgent,
   ) {
     try {
-      // Log every incoming webhook
       await this.log({
         gateway,
         eventType: payload?.event || "unknown",
@@ -77,7 +73,6 @@ class WebhookService {
     }
   }
 
-  // ─── Razorpay handler ───
   static async handleRazorpay(payload, signature, ipAddress, userAgent) {
     try {
       const event = payload?.event;
@@ -89,7 +84,6 @@ class WebhookService {
         return { success: false, error: "Missing order_id in webhook" };
       }
 
-      // Only act on captured/authorized payments
       if (
         event !== "payment.captured" &&
         event !== "payment.authorized" &&
@@ -112,7 +106,6 @@ class WebhookService {
         return { success: false, error: "Payment record not found" };
       }
 
-      // Idempotency: if already paid, still ensure invoice went out
       if (payment.status !== "paid") {
         await Payment.update(payment.id, {
           status: "paid",
@@ -137,8 +130,6 @@ class WebhookService {
         );
       }
 
-      // 🧾 Fire invoice email (non-blocking). sendInvoiceAfterSuccess is
-      // idempotent — safe even if the verify endpoint already triggered it.
       require("../controllers/orderController")
         .sendInvoiceAfterSuccess(payment.order_id)
         .catch((e) => console.error("Webhook invoice email error:", e.message));
@@ -165,7 +156,6 @@ class WebhookService {
     }
   }
 
-  // ─── Admin helpers ───
   static async getWebhookLogs(gateway, limit = 100) {
     try {
       const [rows] = gateway
