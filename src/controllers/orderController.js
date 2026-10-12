@@ -218,6 +218,11 @@ exports.updateOrderStatus = async (req, res) => {
       query += ", cancel_reason = ?";
       params.push(cancel_reason);
     }
+
+    if (status === "delivered") {
+      query += `, payment_status = IF(payment_method IN ('cod','COD','Cash on Delivery'), 'paid', payment_status)`;
+    }
+
     query += " WHERE id = ?";
     params.push(id);
 
@@ -257,8 +262,8 @@ exports.createOrder = async (req, res) => {
     const userId = req.user.id;
 
     const [result] = await db.execute(
-      `INSERT INTO orders (user_id, address, payment_method, subtotal, gst, delivery_charges, discount, total, status) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+      `INSERT INTO orders (user_id, address, payment_method, subtotal, gst, delivery_charges, discount, total, status, payment_status) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
       [
         userId,
         JSON.stringify(address),
@@ -268,6 +273,7 @@ exports.createOrder = async (req, res) => {
         deliveryCharges,
         discount,
         total,
+        "pending",
       ],
     );
 
