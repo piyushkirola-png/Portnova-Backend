@@ -72,10 +72,16 @@ exports.getAnalyticsSummary = async (req, res) => {
       const match = last7Rows.find((row) => {
         const raw = row.day_key;
         if (!raw) return false;
-        const rk =
-          typeof raw === "string"
-            ? raw.slice(0, 10)
-            : new Date(raw).toISOString().slice(0, 10);
+
+        let rk;
+        if (typeof raw === "string") {
+          rk = raw.slice(0, 10);
+        } else {
+          const yyyy = raw.getFullYear();
+          const mm = String(raw.getMonth() + 1).padStart(2, "0");
+          const dd = String(raw.getDate()).padStart(2, "0");
+          rk = `${yyyy}-${mm}-${dd}`;
+        }
         return rk === key;
       });
 
