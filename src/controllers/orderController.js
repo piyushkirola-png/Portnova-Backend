@@ -37,20 +37,20 @@ exports.getAnalyticsSummary = async (req, res) => {
        FROM orders`,
     );
 
+    // ✅ FIXED: removed CONVERT_TZ (DB already stores IST)
     const [todayRows] = await db.execute(
       `SELECT COUNT(*) AS today_orders
        FROM orders
-       WHERE DATE(CONVERT_TZ(created_at, '+00:00', '+05:30')) = 
-             DATE(CONVERT_TZ(NOW(), '+00:00', '+05:30'))`,
+       WHERE DATE(created_at) = CURDATE()`,
     );
 
+    // ✅ FIXED: removed CONVERT_TZ on SELECT and WHERE
     const [last7Rows] = await db.execute(
       `SELECT
-         DATE(CONVERT_TZ(created_at, '+00:00', '+05:30')) AS day_key,
+         DATE(created_at) AS day_key,
          COALESCE(SUM(CASE WHEN payment_status = 'paid' THEN total ELSE 0 END), 0) AS revenue
        FROM orders
-       WHERE DATE(CONVERT_TZ(created_at, '+00:00', '+05:30')) >= 
-             DATE_SUB(DATE(CONVERT_TZ(NOW(), '+00:00', '+05:30')), INTERVAL 6 DAY)
+       WHERE DATE(created_at) >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
        GROUP BY day_key
        ORDER BY day_key ASC`,
     );
@@ -112,6 +112,7 @@ exports.getAnalyticsSummary = async (req, res) => {
       { name: "Failed", value: Number(kpi.failed_payment_orders || 0) },
     ];
 
+    // ✅ FIXED: removed CONVERT_TZ, uses CURDATE()
     const [todayOrdersList] = await db.execute(
       `SELECT 
          o.id,
@@ -123,8 +124,7 @@ exports.getAnalyticsSummary = async (req, res) => {
          u.email AS customer_email
        FROM orders o
        LEFT JOIN users u ON o.user_id = u.id
-       WHERE DATE(CONVERT_TZ(o.created_at, '+00:00', '+05:30')) = 
-             DATE(CONVERT_TZ(NOW(), '+00:00', '+05:30'))
+       WHERE DATE(o.created_at) = CURDATE()
        ORDER BY o.created_at DESC
        LIMIT 5`,
     );
